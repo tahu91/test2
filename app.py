@@ -4,7 +4,7 @@ from PIL import Image
 import streamlit as st
 
 # Load model yang telah dilatih (misalnya, cnn_model.h5)
-model = tf.keras.models.load_model('cnn_model.h5')
+model = tf.keras.models.load_model('best_cnn_model.h5')
 
 # Daftar kelas CIFAR-10
 class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
