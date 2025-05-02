@@ -1,1 +1,3 @@
-pip install streamlit tensorflow pillow
+streamlit
+tensorflow
+pillow
