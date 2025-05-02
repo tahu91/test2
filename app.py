@@ -3,6 +3,7 @@ from tensorflow.keras.models import load_model
 import streamlit as st
 import numpy as np
 from PIL import Image
+import traceback
 
 # Konfigurasi awal
 MODEL_PATH = 'best_cnn_model.h5'
@@ -27,13 +28,14 @@ def load_safe_model():
     global TARGET_SIZE, is_mobilenet
 
     try:
-        model = load_model(MODEL_PATH)
+        model = load_model(MODEL_PATH, compile=False, custom_objects={})
         TARGET_SIZE = (150, 150)  # untuk model custom CNN
         is_mobilenet = False
         st.sidebar.success("Model loaded successfully")
         return model
     except Exception as e:
         st.sidebar.error(f"Primary load failed: {str(e)}")
+        st.sidebar.text(traceback.format_exc())
         try:
             model = load_model(MODEL_PATH, compile=False)
             TARGET_SIZE = (150, 150)
@@ -43,7 +45,6 @@ def load_safe_model():
         except:
             st.sidebar.warning("Using MobileNetV2 as fallback")
             from tensorflow.keras.applications import MobileNetV2
-            from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
             TARGET_SIZE = (224, 224)  # ukuran untuk MobileNetV2
             is_mobilenet = True
             return MobileNetV2(weights='imagenet')
