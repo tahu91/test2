@@ -56,7 +56,7 @@ def main():
     with st.sidebar:
         st.header("Pengaturan")
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
-        debug_mode = st.checkbox("Mode Debug", False)
+        # debug_mode = st.checkbox("Mode Debug", False)
 
     # Upload gambar
     uploaded_file = st.file_uploader(
@@ -114,7 +114,7 @@ def main():
                         ax.set_title('Confidence Score')
                         st.pyplot(fig)
 
-                        # Tampilkan gambar yang sudah diproses untuk debug
+                        # Tampilkan gambar yang sudah diproses untuk 
                         if debug_mode:
                             st.image(processed_img, caption="Gambar setelah Preprocessing", clamp=True)
 
