@@ -8,7 +8,7 @@ import os
 
 # Konfigurasi halaman
 st.set_page_config(
-    page_title="Cat vs Dog Classifier - No Size Limit",
+    page_title="Cat vs Dog Classifier with Augmentation",
     page_icon="🐾",
     layout="centered"
 )
@@ -34,7 +34,31 @@ def preprocess_image(image, img_size=(160, 160)):
     image = tf.image.resize(image, img_size)
     image = tf.cast(image, tf.float32) / 255.0
     
-    return image.numpy()  # Kembalikan numpy array
+    return image
+
+# --- Fungsi Augmentasi ---
+def apply_augmentations(image):
+    """
+    Menerapkan augmentasi gambar:
+    1. Random flip horizontal
+    2. Random rotation
+    3. Random zoom
+    4. Random brightness
+    """
+    # Augmentasi 1: Random flip
+    image = tf.image.random_flip_left_right(image)
+    
+    # Augmentasi 2: Random rotation (max 10 derajat)
+    image = tf.image.rot90(image, k=np.random.randint(0, 2))
+    
+    # Augmentasi 3: Random zoom (max 10%)
+    image = tf.image.random_crop(image, size=[int(0.9*image.shape[0]), int(0.9*image.shape[1]), 3])
+    image = tf.image.resize(image, (image.shape[0], image.shape[1]))
+    
+    # Augmentasi 4: Random brightness (max 20%)
+    image = tf.image.random_brightness(image, max_delta=0.2)
+    
+    return image
 
 # --- Fungsi Tampilan Gambar yang Aman ---
 def safe_display_image(image, caption, use_column_width=True):
@@ -79,18 +103,21 @@ def load_model():
 
 # --- Main App ---
 def main():
-    st.title("🐱 vs 🐶 Image Classifier - Unlimited Size")
+    st.title("🐱 vs 🐶 Image Classifier with Augmentation")
     st.markdown("""
-    Upload gambar kucing atau anjing dalam ukuran berapapun!
+    Upload gambar kucing atau anjing dan coba fitur augmentasi!
     """)
 
     # Sidebar
     with st.sidebar:
-        st.header("Pengaturan")
+        st.header("Pengaturan Augmentasi")
+        use_augmentation = st.checkbox("Aktifkan Augmentasi", True)
+        show_original = st.checkbox("Tampilkan Gambar Asli", True)
+        show_augmented = st.checkbox("Tampilkan Hasil Augmentasi", True)
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
         debug_mode = st.checkbox("Mode Debug", False)
 
-    # Upload gambar tanpa limit size
+    # Upload gambar
     uploaded_file = st.file_uploader(
         "Pilih gambar...", 
         type=["jpg", "jpeg", "png"],
@@ -103,49 +130,53 @@ def main():
             pil_image = Image.open(uploaded_file).convert("RGB")
             
             # Tampilkan gambar asli
-            col1, col2 = st.columns(2)
-            with col1:
-                safe_display_image(pil_image, "Gambar Asli")
+            if show_original:
+                st.subheader("Gambar Asli")
+                safe_display_image(pil_image, "")
 
             # Preprocessing
             img_array = np.array(pil_image)
-            if debug_mode:
-                st.write("Shape sebelum preprocessing:", img_array.shape)
-                st.write("Tipe data:", img_array.dtype)
-
             processed_img = preprocess_image(img_array)
 
+            # Augmentasi
+            if use_augmentation:
+                augmented_img = apply_augmentations(processed_img)
+                if show_augmented:
+                    st.subheader("Hasil Augmentasi")
+                    safe_display_image(augmented_img, "")
+                
+                # Gunakan gambar augmented untuk prediksi
+                final_img = augmented_img
+            else:
+                final_img = processed_img
+
             if debug_mode:
-                st.write("Shape setelah preprocessing:", processed_img.shape)
-                st.write("Nilai pixel (contoh):", processed_img[0,0,:])
+                st.write("Shape setelah preprocessing:", final_img.shape)
+                st.write("Nilai pixel (contoh):", final_img.numpy()[0,0,:])
 
             # Prediksi
             model = load_model()
             if model is not None:
-                input_tensor = np.expand_dims(processed_img, axis=0)
+                input_tensor = np.expand_dims(final_img.numpy(), axis=0)
                 prediction = model.predict(input_tensor, verbose=0)[0][0]
 
                 # Tampilkan hasil
-                with col2:
-                    st.subheader("Hasil Prediksi")
-                    
-                    if prediction > 0.5:
-                        st.success(f"🐶 Anjing (Confidence: {prediction*100:.1f}%)")
-                    else:
-                        st.success(f"🐱 Kucing (Confidence: {(1-prediction)*100:.1f}%)")
+                st.subheader("Hasil Prediksi")
+                
+                if prediction > 0.5:
+                    st.success(f"🐶 Anjing (Confidence: {prediction*100:.1f}%)")
+                else:
+                    st.success(f"🐱 Kucing (Confidence: {(1-prediction)*100:.1f}%)")
 
-                    if show_confidence:
-                        # Visualisasi confidence
-                        fig, ax = plt.subplots(figsize=(6, 2))
-                        ax.barh(['Kucing', 'Anjing'], 
-                               [(1-prediction)*100, prediction*100], 
-                               color=['#ff9999', '#66b3ff'])
-                        ax.set_xlim(0, 100)
-                        ax.set_title('Confidence Score')
-                        st.pyplot(fig)
-
-                    if debug_mode:
-                        safe_display_image(processed_img, "Gambar setelah Preprocessing")
+                if show_confidence:
+                    # Visualisasi confidence
+                    fig, ax = plt.subplots(figsize=(6, 2))
+                    ax.barh(['Kucing', 'Anjing'], 
+                           [(1-prediction)*100, prediction*100], 
+                           color=['#ff9999', '#66b3ff'])
+                    ax.set_xlim(0, 100)
+                    ax.set_title('Confidence Score')
+                    st.pyplot(fig)
 
         except Exception as e:
             st.error(f"Terjadi error: {str(e)}")
