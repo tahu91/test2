@@ -29,9 +29,9 @@ def preprocess_image(image, img_size=(160, 160)):
 # --- Augmentasi (opsional) ---
 def apply_augmentations(image):
     """Augmentasi real-time jika diperlukan"""
-    # if st.sidebar.checkbox("Gunakan Augmentasi"):
-        # image = tf.image.random_flip_left_right(image)
-        # image = tf.image.random_brightness(image, 0.1)
+    if st.sidebar.checkbox("Gunakan Augmentasi"):
+        image = tf.image.random_flip_left_right(image)
+        image = tf.image.random_brightness(image, 0.1)
     return image
 
 # --- Load Model ---
@@ -57,7 +57,6 @@ def main():
         st.header("Pengaturan")
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
         debug_mode = st.checkbox("Mode Debug", False)
-        # debug_mode = true
 
     # Upload gambar
     uploaded_file = st.file_uploader(
