@@ -1,84 +1,127 @@
 # app.py
 import streamlit as st
 import tensorflow as tf
-from tensorflow.keras import layers
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
-# Set page config
+# Konfigurasi halaman
 st.set_page_config(
     page_title="Cat vs Dog Classifier",
     page_icon="🐾",
-    layout="wide"
+    layout="centered"
 )
 
-# Load and cache the model
-@st.cache_resource
-def load_model():
-    # This should match your model architecture from the notebook
-    model = tf.keras.Sequential([
-        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(160, 160, 3)),
-        layers.MaxPooling2D(),
-        layers.Conv2D(64, (3, 3), activation='relu'),
-        layers.MaxPooling2D(),
-        layers.Conv2D(128, (3, 3), activation='relu'),
-        layers.MaxPooling2D(),
-        layers.Flatten(),
-        layers.Dense(128, activation='relu'),
-        layers.Dense(1, activation='sigmoid')
-    ])
-    
-    # Load your trained weights (you'll need to save them first)
-    model.load_weights('cats_vs_dogs_mobilenetv2_final.h5')
-    
-    return model
-
-model = load_model()
-
-# Preprocessing function (matches your notebook)
-def preprocess_image(image):
-    image = tf.image.resize(image, (160, 160))
+# --- Fungsi Preprocessing (dari utils.py) ---
+def preprocess_image(image, img_size=(160, 160)):
+    """
+    Preprocessing gambar yang konsisten dengan pelatihan model:
+    1. Resize ke 160x160
+    2. Normalisasi pixel [0, 1]
+    """
+    # Convert PIL Image to TensorFlow tensor if needed
+    if isinstance(image, np.ndarray):
+        image = tf.convert_to_tensor(image)
+    image = tf.image.resize(image, img_size)
     image = tf.cast(image, tf.float32) / 255.0
+    return image.numpy()
+
+# --- Augmentasi (opsional) ---
+def apply_augmentations(image):
+    """Augmentasi real-time jika diperlukan"""
+    if st.sidebar.checkbox("Gunakan Augmentasi"):
+        image = tf.image.random_flip_left_right(image)
+        image = tf.image.random_brightness(image, 0.1)
     return image
 
-# Streamlit app
+# --- Load Model ---
+@st.cache_resource
+def load_model():
+    try:
+        model = tf.keras.models.load_model('models/cat_dog_model.h5')
+        st.sidebar.success("Model berhasil dimuat!")
+        return model
+    except Exception as e:
+        st.sidebar.error(f"Gagal memuat model: {str(e)}")
+        return None
+
+# --- Main App ---
 def main():
     st.title("🐱 vs 🐶 Image Classifier")
-    st.write("Upload an image of a cat or dog, and the model will predict which one it is!")
-    
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-    
+    st.markdown("""
+    Upload gambar kucing atau anjing, dan model akan memprediksi jenisnya!
+    """)
+
+    # Sidebar
+    with st.sidebar:
+        st.header("Pengaturan")
+        show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
+        debug_mode = st.checkbox("Mode Debug", False)
+
+    # Upload gambar
+    uploaded_file = st.file_uploader(
+        "Pilih gambar...", 
+        type=["jpg", "jpeg", "png"],
+        key="file_uploader"
+    )
+
     if uploaded_file is not None:
-        # Display the uploaded image
-        image = Image.open(uploaded_file)
-        st.image(image, caption='Uploaded Image', use_column_width=True)
-        
-        # Preprocess and predict
-        img_array = np.array(image)
-        img_array = preprocess_image(img_array)
-        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-        
-        prediction = model.predict(img_array)
-        
-        # Display results
-        st.subheader("Prediction Results")
-        if prediction[0][0] > 0.5:
-            st.success(f"🐶 It's a dog! (Confidence: {prediction[0][0]*100:.2f}%)")
-        else:
-            st.success(f"🐱 It's a cat! (Confidence: {(1-prediction[0][0])*100:.2f}%)")
+        try:
+            # Load dan tampilkan gambar
+            image = Image.open(uploaded_file).convert("RGB")
             
-        # Show confidence bar
-        confidence = prediction[0][0] if prediction[0][0] > 0.5 else 1 - prediction[0][0]
-        st.progress(float(confidence))
-        
-        # Add some explanation
-        st.markdown("""
-        ### How It Works
-        - The model uses a convolutional neural network (CNN) trained on thousands of cat and dog images
-        - It analyzes visual patterns in the image to make its prediction
-        - Confidence score shows how certain the model is about its prediction
-        """)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.image(image, caption="Gambar Asli", use_column_width=True)
+
+            # Preprocessing
+            img_array = np.array(image)
+            if debug_mode:
+                st.write("Shape sebelum preprocessing:", img_array.shape)
+                st.write("Tipe data:", img_array.dtype)
+
+            processed_img = preprocess_image(img_array)
+            processed_img = apply_augmentations(processed_img)
+
+            if debug_mode:
+                st.write("Shape setelah preprocessing:", processed_img.shape)
+                st.write("Nilai pixel (contoh):", processed_img[0,0,:])
+
+            # Prediksi
+            model = load_model()
+            if model is not None:
+                input_tensor = np.expand_dims(processed_img, axis=0)
+                prediction = model.predict(input_tensor)[0][0]
+
+                # Tampilkan hasil
+                with col2:
+                    st.subheader("Hasil Prediksi")
+                    
+                    if prediction > 0.5:
+                        st.success(f"🐶 Anjing (Confidence: {prediction*100:.1f}%)")
+                        class_label = "Anjing"
+                    else:
+                        st.success(f"🐱 Kucing (Confidence: {(1-prediction)*100:.1f}%)")
+                        class_label = "Kucing"
+
+                    if show_confidence:
+                        # Visualisasi confidence
+                        fig, ax = plt.subplots(figsize=(6, 2))
+                        ax.barh(['Kucing', 'Anjing'], 
+                               [(1-prediction)*100, prediction*100], 
+                               color=['#ff9999', '#66b3ff'])
+                        ax.set_xlim(0, 100)
+                        ax.set_title('Confidence Score')
+                        st.pyplot(fig)
+
+                        # Tampilkan gambar yang sudah diproses untuk debug
+                        if debug_mode:
+                            st.image(processed_img, caption="Gambar setelah Preprocessing", clamp=True)
+
+        except Exception as e:
+            st.error(f"Terjadi error: {str(e)}")
+            if debug_mode:
+                st.exception(e)
 
 if __name__ == "__main__":
     main()
