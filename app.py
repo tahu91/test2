@@ -13,14 +13,13 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- Fungsi Preprocessing yang Diperbaiki ---
+# --- Fungsi Preprocessing ---
 def preprocess_image(image, img_size=(160, 160)):
     """
-    Preprocessing gambar yang kompatibel dengan Streamlit:
+    Preprocessing gambar untuk model:
     1. Konversi ke tensor jika belum
     2. Resize ke target size
     3. Normalisasi pixel [0, 1]
-    4. Return numpy array untuk kompatibilitas display
     """
     # Handle berbagai tipe input
     if isinstance(image, Image.Image):
@@ -35,12 +34,11 @@ def preprocess_image(image, img_size=(160, 160)):
     image = tf.image.resize(image, img_size)
     image = tf.cast(image, tf.float32) / 255.0
     
-    # Konversi ke numpy dan pastikan nilai valid
-    return np.clip(image.numpy(), 0.0, 1.0)
+    return image.numpy()  # Kembalikan numpy array
 
-# --- Augmentasi yang Diperbaiki ---
+# --- Fungsi Augmentasi ---
 def apply_augmentations(image, use_augmentation=True):
-    """Augmentasi dengan penanganan type yang aman"""
+    """Augmentasi gambar dengan penanganan type yang aman"""
     if not use_augmentation:
         return image
     
@@ -51,9 +49,33 @@ def apply_augmentations(image, use_augmentation=True):
     # Apply augmentasi
     image = tf.image.random_flip_left_right(image)
     image = tf.image.random_brightness(image, max_delta=0.1)
-    return image.numpy()  # Kembalikan ke numpy untuk konsistensi
+    return image.numpy()
 
-# --- Load Model yang Diperkuat ---
+# --- Fungsi Tampilan Gambar yang Aman ---
+def safe_display_image(image, caption, use_column_width=True):
+    """Menampilkan gambar dari berbagai format input"""
+    try:
+        # Jika input adalah PIL Image
+        if isinstance(image, Image.Image):
+            st.image(image, caption=caption, use_column_width=use_column_width)
+            return
+        
+        # Jika input adalah tensor
+        if isinstance(image, tf.Tensor):
+            image = image.numpy()
+        
+        # Handle numpy array
+        if isinstance(image, np.ndarray):
+            # Normalisasi jika perlu
+            if image.dtype == np.float32:
+                image = np.clip(image, 0, 1)
+                image = (image * 255).astype(np.uint8)
+            
+            st.image(image, caption=caption, use_column_width=use_column_width)
+    except Exception as e:
+        st.error(f"Gagal menampilkan gambar: {str(e)}")
+
+# --- Load Model ---
 @st.cache_resource
 def load_model():
     model_path = 'cats_vs_dogs_mobilenetv2_final.h5'
@@ -64,21 +86,11 @@ def load_model():
             return None
             
         model = tf.keras.models.load_model(model_path)
+        st.sidebar.success("Model berhasil dimuat!")
         return model
     except Exception as e:
         st.error(f"Gagal memuat model: {str(e)}")
         return None
-
-# --- Fungsi Tampilan Gambar yang Aman ---
-def safe_display_image(image, caption, use_column_width=True):
-    """Menangani berbagai format gambar untuk display Streamlit"""
-    if isinstance(image, tf.Tensor):
-        image = image.numpy()
-    if image.dtype == np.float32:
-        image = np.clip(image, 0, 1)
-        if image.max() <= 1.0:
-            image = (image * 255).astype(np.uint8)
-    st.image(image, caption=caption, use_column_width=use_column_width)
 
 # --- Main App ---
 def main():
@@ -94,7 +106,7 @@ def main():
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
         debug_mode = st.checkbox("Mode Debug", False)
 
-    # Upload gambar dengan limit size
+    # Upload gambar
     uploaded_file = st.file_uploader(
         "Pilih gambar...", 
         type=["jpg", "jpeg", "png"],
@@ -108,15 +120,16 @@ def main():
                 st.error("Ukuran file terlalu besar! Maksimal 10MB")
                 st.stop()
 
-            # Load dan tampilkan gambar
-            image = Image.open(uploaded_file).convert("RGB")
+            # Load gambar
+            pil_image = Image.open(uploaded_file).convert("RGB")
             
+            # Tampilkan gambar asli
             col1, col2 = st.columns(2)
             with col1:
-                safe_display_image(image, "Gambar Asli")
+                safe_display_image(pil_image, "Gambar Asli")
 
             # Preprocessing
-            img_array = np.array(image)
+            img_array = np.array(pil_image)
             if debug_mode:
                 st.write("Shape sebelum preprocessing:", img_array.shape)
                 st.write("Tipe data:", img_array.dtype)
