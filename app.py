@@ -53,7 +53,7 @@ def main():
     """)
 
     # Sidebar
-    # with st.sidebar:
+    with st.sidebar:
         st.header("Pengaturan")
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
         # debug_mode = st.checkbox("Mode Debug", False)
