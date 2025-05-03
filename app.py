@@ -30,7 +30,7 @@ def load_model():
     ])
     
     # Load your trained weights (you'll need to save them first)
-    # model.load_weights('path_to_your_weights.h5')
+    model.load_weights('cats_vs_dogs_mobilenetv2_final.h5')
     
     return model
 
