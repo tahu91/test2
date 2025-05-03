@@ -8,7 +8,7 @@ import os
 
 # Konfigurasi halaman
 st.set_page_config(
-    page_title="Cat vs Dog Classifier",
+    page_title="Cat vs Dog Classifier - No Size Limit",
     page_icon="🐾",
     layout="centered"
 )
@@ -35,21 +35,6 @@ def preprocess_image(image, img_size=(160, 160)):
     image = tf.cast(image, tf.float32) / 255.0
     
     return image.numpy()  # Kembalikan numpy array
-
-# --- Fungsi Augmentasi ---
-def apply_augmentations(image, use_augmentation=True):
-    """Augmentasi gambar dengan penanganan type yang aman"""
-    if not use_augmentation:
-        return image
-    
-    # Konversi ke tensor jika belum
-    if isinstance(image, np.ndarray):
-        image = tf.convert_to_tensor(image)
-    
-    # Apply augmentasi
-    image = tf.image.random_flip_left_right(image)
-    image = tf.image.random_brightness(image, max_delta=0.1)
-    return image.numpy()
 
 # --- Fungsi Tampilan Gambar yang Aman ---
 def safe_display_image(image, caption, use_column_width=True):
@@ -94,32 +79,26 @@ def load_model():
 
 # --- Main App ---
 def main():
-    st.title("🐱 vs 🐶 Image Classifier")
+    st.title("🐱 vs 🐶 Image Classifier - Unlimited Size")
     st.markdown("""
-    Upload gambar kucing atau anjing, dan model akan memprediksi jenisnya!
+    Upload gambar kucing atau anjing dalam ukuran berapapun!
     """)
 
     # Sidebar
     with st.sidebar:
         st.header("Pengaturan")
-        use_augmentation = st.checkbox("Gunakan Augmentasi", True)
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
         debug_mode = st.checkbox("Mode Debug", False)
 
-    # Upload gambar
+    # Upload gambar tanpa limit size
     uploaded_file = st.file_uploader(
         "Pilih gambar...", 
         type=["jpg", "jpeg", "png"],
-        help="Maksimal ukuran file: 10MB"
+        help="Tidak ada batasan ukuran file"
     )
 
     if uploaded_file is not None:
         try:
-            # Validasi ukuran file
-            if uploaded_file.size > 10 * 1024 * 1024:  # 10MB
-                st.error("Ukuran file terlalu besar! Maksimal 10MB")
-                st.stop()
-
             # Load gambar
             pil_image = Image.open(uploaded_file).convert("RGB")
             
@@ -135,7 +114,6 @@ def main():
                 st.write("Tipe data:", img_array.dtype)
 
             processed_img = preprocess_image(img_array)
-            processed_img = apply_augmentations(processed_img, use_augmentation)
 
             if debug_mode:
                 st.write("Shape setelah preprocessing:", processed_img.shape)
@@ -153,10 +131,8 @@ def main():
                     
                     if prediction > 0.5:
                         st.success(f"🐶 Anjing (Confidence: {prediction*100:.1f}%)")
-                        class_label = "Anjing"
                     else:
                         st.success(f"🐱 Kucing (Confidence: {(1-prediction)*100:.1f}%)")
-                        class_label = "Kucing"
 
                     if show_confidence:
                         # Visualisasi confidence
