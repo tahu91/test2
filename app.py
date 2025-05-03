@@ -56,7 +56,7 @@ def main():
     with st.sidebar:
         st.header("Pengaturan")
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
-        debug_mode = False
+        debug_mode = true
 
     # Upload gambar
     uploaded_file = st.file_uploader(
