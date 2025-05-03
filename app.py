@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import os
 
 # Konfigurasi halaman
 st.set_page_config(
@@ -12,38 +13,72 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- Fungsi Preprocessing (dari utils.py) ---
+# --- Fungsi Preprocessing yang Diperbaiki ---
 def preprocess_image(image, img_size=(160, 160)):
     """
-    Preprocessing gambar yang konsisten dengan pelatihan model:
-    1. Resize ke 160x160
-    2. Normalisasi pixel [0, 1]
+    Preprocessing gambar yang kompatibel dengan Streamlit:
+    1. Konversi ke tensor jika belum
+    2. Resize ke target size
+    3. Normalisasi pixel [0, 1]
+    4. Return numpy array untuk kompatibilitas display
     """
-    # Convert PIL Image to TensorFlow tensor if needed
-    if isinstance(image, np.ndarray):
-        image = tf.convert_to_tensor(image)
+    # Handle berbagai tipe input
+    if isinstance(image, Image.Image):
+        image = np.array(image)
+    elif isinstance(image, np.ndarray):
+        pass
+    else:
+        raise ValueError("Format gambar tidak didukung")
+    
+    # Konversi ke tensor dan preprocessing
+    image = tf.convert_to_tensor(image)
     image = tf.image.resize(image, img_size)
     image = tf.cast(image, tf.float32) / 255.0
-    return image.numpy()
+    
+    # Konversi ke numpy dan pastikan nilai valid
+    return np.clip(image.numpy(), 0.0, 1.0)
 
-# --- Augmentasi (opsional) ---
-def apply_augmentations(image):
-    """Augmentasi real-time jika diperlukan"""
-    if st.sidebar.checkbox("Gunakan Augmentasi"):
-        image = tf.image.random_flip_left_right(image)
-        image = tf.image.random_brightness(image, 0.1)
-    return image
+# --- Augmentasi yang Diperbaiki ---
+def apply_augmentations(image, use_augmentation=True):
+    """Augmentasi dengan penanganan type yang aman"""
+    if not use_augmentation:
+        return image
+    
+    # Konversi ke tensor jika belum
+    if isinstance(image, np.ndarray):
+        image = tf.convert_to_tensor(image)
+    
+    # Apply augmentasi
+    image = tf.image.random_flip_left_right(image)
+    image = tf.image.random_brightness(image, max_delta=0.1)
+    return image.numpy()  # Kembalikan ke numpy untuk konsistensi
 
-# --- Load Model ---
+# --- Load Model yang Diperkuat ---
 @st.cache_resource
 def load_model():
+    model_path = 'cats_vs_dogs_mobilenetv2_final.h5'
     try:
-        model = tf.keras.models.load_model('cats_vs_dogs_mobilenetv2_final.h5')
-        st.sidebar.success("Model berhasil dimuat!")
+        if not os.path.exists(model_path):
+            st.error(f"File model tidak ditemukan di: {model_path}")
+            st.info("Pastikan file model ada di direktori yang sama dengan script")
+            return None
+            
+        model = tf.keras.models.load_model(model_path)
         return model
     except Exception as e:
-        st.sidebar.error(f"Gagal memuat model: {str(e)}")
+        st.error(f"Gagal memuat model: {str(e)}")
         return None
+
+# --- Fungsi Tampilan Gambar yang Aman ---
+def safe_display_image(image, caption, use_column_width=True):
+    """Menangani berbagai format gambar untuk display Streamlit"""
+    if isinstance(image, tf.Tensor):
+        image = image.numpy()
+    if image.dtype == np.float32:
+        image = np.clip(image, 0, 1)
+        if image.max() <= 1.0:
+            image = (image * 255).astype(np.uint8)
+    st.image(image, caption=caption, use_column_width=use_column_width)
 
 # --- Main App ---
 def main():
@@ -55,24 +90,30 @@ def main():
     # Sidebar
     with st.sidebar:
         st.header("Pengaturan")
+        use_augmentation = st.checkbox("Gunakan Augmentasi", True)
         show_confidence = st.checkbox("Tampilkan Visualisasi Confidence", True)
         debug_mode = st.checkbox("Mode Debug", False)
 
-    # Upload gambar
+    # Upload gambar dengan limit size
     uploaded_file = st.file_uploader(
         "Pilih gambar...", 
         type=["jpg", "jpeg", "png"],
-        key="file_uploader"
+        help="Maksimal ukuran file: 10MB"
     )
 
     if uploaded_file is not None:
         try:
+            # Validasi ukuran file
+            if uploaded_file.size > 10 * 1024 * 1024:  # 10MB
+                st.error("Ukuran file terlalu besar! Maksimal 10MB")
+                st.stop()
+
             # Load dan tampilkan gambar
             image = Image.open(uploaded_file).convert("RGB")
             
             col1, col2 = st.columns(2)
             with col1:
-                st.image(image, caption="Gambar Asli", use_column_width=True)
+                safe_display_image(image, "Gambar Asli")
 
             # Preprocessing
             img_array = np.array(image)
@@ -81,7 +122,7 @@ def main():
                 st.write("Tipe data:", img_array.dtype)
 
             processed_img = preprocess_image(img_array)
-            processed_img = apply_augmentations(processed_img)
+            processed_img = apply_augmentations(processed_img, use_augmentation)
 
             if debug_mode:
                 st.write("Shape setelah preprocessing:", processed_img.shape)
@@ -91,7 +132,7 @@ def main():
             model = load_model()
             if model is not None:
                 input_tensor = np.expand_dims(processed_img, axis=0)
-                prediction = model.predict(input_tensor)[0][0]
+                prediction = model.predict(input_tensor, verbose=0)[0][0]
 
                 # Tampilkan hasil
                 with col2:
@@ -114,9 +155,8 @@ def main():
                         ax.set_title('Confidence Score')
                         st.pyplot(fig)
 
-                        # Tampilkan gambar yang sudah diproses untuk 
-                        if debug_mode:
-                            st.image(processed_img, caption="Gambar setelah Preprocessing", clamp=True)
+                    if debug_mode:
+                        safe_display_image(processed_img, "Gambar setelah Preprocessing")
 
         except Exception as e:
             st.error(f"Terjadi error: {str(e)}")
