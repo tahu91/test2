@@ -38,7 +38,7 @@ def apply_augmentations(image):
 @st.cache_resource
 def load_model():
     try:
-        model = tf.keras.models.load_model('models/cat_dog_model.h5')
+        model = tf.keras.models.load_model('cats_vs_dogs_mobilenetv2_final.h5')
         st.sidebar.success("Model berhasil dimuat!")
         return model
     except Exception as e:
