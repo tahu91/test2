@@ -30,8 +30,8 @@ def preprocess_image(image, img_size=(160, 160)):
 def apply_augmentations(image):
     """Augmentasi real-time jika diperlukan"""
     # if st.sidebar.checkbox("Gunakan Augmentasi"):
-        image = tf.image.random_flip_left_right(image)
-        image = tf.image.random_brightness(image, 0.1)
+        # image = tf.image.random_flip_left_right(image)
+        # image = tf.image.random_brightness(image, 0.1)
     return image
 
 # --- Load Model ---
